@@ -96,6 +96,9 @@ services:
     environment:
       SHIPMENTS_URL: http://shipments:8081
       CATALOG_URL: http://catalog:8082
+      NOTIFY_URL: http://notify:8083
+      REPORT_URL: http://report:8084
+      AUDIT_URL: http://audit:8085
     ports:
       - "8080:8080"
     networks:
