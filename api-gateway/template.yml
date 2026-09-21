@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  RutaExpress - API Gateway (HTTP API) con JWT Authorizer de Azure AD.
+  Enruta /api/* al BFF desplegado en EC2 (Docker Compose).
+
+Parameters:
+  AzureTenantId:
+    Type: String
+    Description: Directory (tenant) ID de Azure AD.
+  AzureClientId:
+    Type: String
+    Description: Application (client) ID de la API en Azure AD (audience del JWT).
+  BackendHost:
+    Type: String
+    Description: DNS o IP del EC2 donde corre el BFF (puerto 8080).
+  AllowedOrigin:
+    Type: String
+    Default: "*"
+    Description: Origen permitido para CORS (en prod, el dominio del frontend).
+
+Resources:
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: rutaexpress-api
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigin
+        AllowMethods:
+          - GET
+          - POST
+          - PATCH
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+
+  AzureAdAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      Name: azure-ad
+      AuthorizerType: JWT
+      IdentitySource:
+        - "$request.header.Authorization"
+      JwtConfiguration:
+        Audience:
+          - !Ref AzureClientId
+        Issuer: !Sub "https://login.microsoftonline.com/${AzureTenantId}/v2.0"
+
+  BffIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: ANY
+      IntegrationUri: !Sub "http://${BackendHost}:8080/api/{proxy}"
+      PayloadFormatVersion: "1.0"
+
+  ApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "ANY /api/{proxy+}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref AzureAdAuthorizer
+      Target: !Sub "integrations/${BffIntegration}"
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+
+Outputs:
+  ApiEndpoint:
+    Description: URL base del API Gateway (usar como VITE_BFF_URL con sufijo /api/bff)
+    Value: !GetAtt HttpApi.ApiEndpoint
