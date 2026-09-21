@@ -1,6 +1,15 @@
 # Aplicaciones (microservicios + frontend).
 # Usar junto con docker-compose.base.yml (define red y brokers):
 #   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml up -d
+#
+# Para activar seguridad JWT (perfil Spring "secure"):
+#   SPRING_PROFILES_ACTIVE=secure AZURE_TENANT_ID=<tenant> AZURE_CLIENT_ID=<client> \
+#     docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml up -d --build
+
+x-spring-env: &spring-env
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+  AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+  AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
 
 services:
   shipments:
@@ -10,6 +19,7 @@ services:
       args:
         MODULE: ms-rutaexpress-shipments
     environment:
+      <<: *spring-env
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-rutaexpress}
@@ -31,6 +41,8 @@ services:
       dockerfile: infra/Dockerfile.service
       args:
         MODULE: ms-rutaexpress-catalog
+    environment:
+      <<: *spring-env
     ports:
       - "8082:8082"
     networks:
@@ -43,6 +55,7 @@ services:
       args:
         MODULE: ms-rutaexpress-notify
     environment:
+      <<: *spring-env
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-rutaexpress}
@@ -62,6 +75,7 @@ services:
       args:
         MODULE: ms-rutaexpress-report
     environment:
+      <<: *spring-env
       KAFKA_BOOTSTRAP: kafka:9092
     ports:
       - "8084:8084"
@@ -78,6 +92,7 @@ services:
       args:
         MODULE: ms-rutaexpress-audit
     environment:
+      <<: *spring-env
       KAFKA_BOOTSTRAP: kafka:9092
     ports:
       - "8085:8085"
@@ -94,6 +109,7 @@ services:
       args:
         MODULE: ms-rutaexpress-bff
     environment:
+      <<: *spring-env
       SHIPMENTS_URL: http://shipments:8081
       CATALOG_URL: http://catalog:8082
       NOTIFY_URL: http://notify:8083
@@ -107,6 +123,11 @@ services:
   frontend:
     build:
       context: ../frontend
+      args:
+        VITE_BFF_URL: ${VITE_BFF_URL:-/api/bff}
+        VITE_AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+        VITE_AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+        VITE_AZURE_API_SCOPE: ${AZURE_API_SCOPE:-api://rutaexpress/access_as_user}
     ports:
       - "3000:80"
     networks:
