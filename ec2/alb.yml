@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: RutaExpress - ALB delante del EC2 que corre el BFF (puerto 8080).
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subredes públicas (al menos 2 AZs) para el ALB.
+  InstanceId:
+    Type: AWS::EC2::Instance::Id
+  InstanceSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: Security group del EC2 (se le abrirá el 8080 desde el ALB).
+
+Resources:
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB RutaExpress
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  InstanceIngressFromAlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref InstanceSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 8080
+      ToPort: 8080
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: rutaexpress-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets: !Ref PublicSubnetIds
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: rutaexpress-bff-tg
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckPath: /actuator/health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Targets:
+        - Id: !Ref InstanceId
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  AlbDnsName:
+    Description: DNS del ALB (usar como BackendHost en la plantilla del API Gateway)
+    Value: !GetAtt LoadBalancer.DNSName
