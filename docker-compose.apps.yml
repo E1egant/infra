@@ -1,0 +1,112 @@
+# Aplicaciones (microservicios + frontend).
+# Usar junto con docker-compose.base.yml (define red y brokers):
+#   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml up -d
+
+services:
+  shipments:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.service
+      args:
+        MODULE: ms-rutaexpress-shipments
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-rutaexpress}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-rutaexpress}
+      KAFKA_BOOTSTRAP: kafka:9092
+    ports:
+      - "8081:8081"
+    networks:
+      - rutaexpress-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  catalog:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.service
+      args:
+        MODULE: ms-rutaexpress-catalog
+    ports:
+      - "8082:8082"
+    networks:
+      - rutaexpress-net
+
+  notify:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.service
+      args:
+        MODULE: ms-rutaexpress-notify
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-rutaexpress}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-rutaexpress}
+    ports:
+      - "8083:8083"
+    networks:
+      - rutaexpress-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  report:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.service
+      args:
+        MODULE: ms-rutaexpress-report
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+    ports:
+      - "8084:8084"
+    networks:
+      - rutaexpress-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  audit:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.service
+      args:
+        MODULE: ms-rutaexpress-audit
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+    ports:
+      - "8085:8085"
+    networks:
+      - rutaexpress-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  bff:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.service
+      args:
+        MODULE: ms-rutaexpress-bff
+    environment:
+      SHIPMENTS_URL: http://shipments:8081
+      CATALOG_URL: http://catalog:8082
+    ports:
+      - "8080:8080"
+    networks:
+      - rutaexpress-net
+
+  frontend:
+    build:
+      context: ../frontend
+    ports:
+      - "3000:80"
+    networks:
+      - rutaexpress-net
+    depends_on:
+      - bff
