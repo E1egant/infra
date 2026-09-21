@@ -12,7 +12,7 @@ Parameters:
     Description: Application (client) ID de la API en Azure AD (audience del JWT).
   BackendHost:
     Type: String
-    Description: DNS o IP del EC2 donde corre el BFF (puerto 8080).
+    Description: DNS del ALB (o del EC2 con el BFF en :8080). Sin puerto si es el ALB.
   AllowedOrigin:
     Type: String
     Default: "*"
@@ -57,7 +57,7 @@ Resources:
       ApiId: !Ref HttpApi
       IntegrationType: HTTP_PROXY
       IntegrationMethod: ANY
-      IntegrationUri: !Sub "http://${BackendHost}:8080/api/{proxy}"
+      IntegrationUri: !Sub "http://${BackendHost}/api/{proxy}"
       PayloadFormatVersion: "1.0"
 
   ApiRoute:

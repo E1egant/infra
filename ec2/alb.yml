@@ -1,5 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: RutaExpress - ALB delante del EC2 que corre el BFF (puerto 8080).
+Description: >-
+  RutaExpress - ALB con ruteo por path sobre un EC2:
+  /api/* -> BFF (:8080) y /* -> frontend nginx (:3000).
 
 Parameters:
   VpcId:
@@ -11,7 +13,7 @@ Parameters:
     Type: AWS::EC2::Instance::Id
   InstanceSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
-    Description: Security group del EC2 (se le abrirá el 8080 desde el ALB).
+    Description: Security group del EC2 (se abrirán 8080 y 3000 desde el ALB).
 
 Resources:
   AlbSecurityGroup:
@@ -25,13 +27,22 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
 
-  InstanceIngressFromAlb:
+  InstanceIngressFromAlbBff:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       GroupId: !Ref InstanceSecurityGroupId
       IpProtocol: tcp
       FromPort: 8080
       ToPort: 8080
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+
+  InstanceIngressFromAlbFrontend:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref InstanceSecurityGroupId
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
       SourceSecurityGroupId: !Ref AlbSecurityGroup
 
   LoadBalancer:
@@ -44,7 +55,20 @@ Resources:
       SecurityGroups:
         - !Ref AlbSecurityGroup
 
-  TargetGroup:
+  FrontendTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: rutaexpress-frontend-tg
+      Port: 3000
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      Targets:
+        - Id: !Ref InstanceId
+
+  BffTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: rutaexpress-bff-tg
@@ -54,9 +78,6 @@ Resources:
       TargetType: instance
       HealthCheckPath: /actuator/health
       HealthCheckProtocol: HTTP
-      HealthCheckIntervalSeconds: 30
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
       Targets:
         - Id: !Ref InstanceId
 
@@ -68,9 +89,22 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref TargetGroup
+          TargetGroupArn: !Ref FrontendTargetGroup
+
+  ApiListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref Listener
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /api/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BffTargetGroup
 
 Outputs:
   AlbDnsName:
-    Description: DNS del ALB (usar como BackendHost en la plantilla del API Gateway)
+    Description: DNS del ALB (usar como BackendHost en el API Gateway; también sirve el SPA en /)
     Value: !GetAtt LoadBalancer.DNSName
