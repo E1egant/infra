@@ -24,7 +24,7 @@ fi
 if [[ "${1:-}" == "--secure" ]]; then
   # shellcheck disable=SC1091
   set -a; source infra/.env; set +a
-  export SPRING_PROFILES_ACTIVE="secure"
+  export SPRING_PROFILES_ACTIVE="prod,secure"
   if [[ -z "${AZURE_TENANT_ID:-}" || -z "${AZURE_CLIENT_ID:-}" ]]; then
     echo "Para --secure, define AZURE_TENANT_ID y AZURE_CLIENT_ID en infra/.env"
     exit 1

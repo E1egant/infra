@@ -1,15 +1,21 @@
 # Aplicaciones (microservicios + frontend).
-# Usar junto con docker-compose.base.yml (define red y brokers):
+# Usar junto con docker-compose.base.yml (define red, brokers y PostgreSQL):
 #   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml up -d
 #
-# Para activar seguridad JWT (perfil Spring "secure"):
-#   SPRING_PROFILES_ACTIVE=secure AZURE_TENANT_ID=<tenant> AZURE_CLIENT_ID=<client> \
+# Seguridad JWT (perfil Spring "secure") combinada con prod:
+#   SPRING_PROFILES_ACTIVE=prod,secure AZURE_TENANT_ID=<tenant> AZURE_CLIENT_ID=<client> \
 #     docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml up -d --build
 
 x-spring-env: &spring-env
-  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+  SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
   AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
   AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+
+x-db-env: &db-env
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_USER: ${POSTGRES_USER:-rutaexpress}
+  DB_PASS: ${POSTGRES_PASSWORD:-rutaexpress}
 
 services:
   shipments:
@@ -19,7 +25,8 @@ services:
       args:
         MODULE: ms-rutaexpress-shipments
     environment:
-      <<: *spring-env
+      <<: [*spring-env, *db-env]
+      DB_NAME: shipments
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-rutaexpress}
@@ -30,6 +37,8 @@ services:
     networks:
       - rutaexpress-net
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       kafka:
@@ -42,11 +51,15 @@ services:
       args:
         MODULE: ms-rutaexpress-catalog
     environment:
-      <<: *spring-env
+      <<: [*spring-env, *db-env]
+      DB_NAME: catalog
     ports:
       - "8082:8082"
     networks:
       - rutaexpress-net
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   notify:
     build:
@@ -55,7 +68,8 @@ services:
       args:
         MODULE: ms-rutaexpress-notify
     environment:
-      <<: *spring-env
+      <<: [*spring-env, *db-env]
+      DB_NAME: notify
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-rutaexpress}
@@ -65,6 +79,8 @@ services:
     networks:
       - rutaexpress-net
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
@@ -92,13 +108,16 @@ services:
       args:
         MODULE: ms-rutaexpress-audit
     environment:
-      <<: *spring-env
+      <<: [*spring-env, *db-env]
+      DB_NAME: audit
       KAFKA_BOOTSTRAP: kafka:9092
     ports:
       - "8085:8085"
     networks:
       - rutaexpress-net
     depends_on:
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_healthy
 
