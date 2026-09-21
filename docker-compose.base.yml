@@ -1,0 +1,32 @@
+name: rutaexpress
+
+networks:
+  rutaexpress-net:
+    driver: bridge
+
+volumes:
+  rabbitmq-data:
+  kafka-data:
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rutaexpress-rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rutaexpress}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-rutaexpress}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - rutaexpress-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
