@@ -1,15 +1,22 @@
-# Aplicaciones (microservicios + frontend).
-# Usar junto con docker-compose.base.yml (define red, brokers y PostgreSQL):
-#   docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml up -d
+# Aplicaciones (microservicios + frontend) desde repos hermanos.
+# Layout esperado (ver Cloud-Native-1/REPOS.md):
+#   Cloudnative/
+#     Cloud-Native-1/  ms-rutaexpress-*/  frontend-rutaexpress/  infra/
+# Uso (desde infra/):
+#   docker compose -f docker-compose.base.yml -f docker-compose.apps.yml up -d --build
 #
-# Seguridad JWT (perfil Spring "secure") combinada con prod:
-#   SPRING_PROFILES_ACTIVE=prod,secure AZURE_TENANT_ID=<tenant> AZURE_CLIENT_ID=<client> \
-#     docker compose -f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml up -d --build
+# Los servicios propios (catalog, audit, report) usan su Dockerfile;
+# los de Diego se construyen con los Dockerfiles genéricos de docker/
+# (cuando agregue los suyos, se cambia a `context: ../<repo>`).
+#
+# Perfiles: por defecto `prod` (PostgreSQL, sin JWT) para desarrollo local.
+# Despliegue: SPRING_PROFILES_ACTIVE=prod,secure con AZURE_TENANT_ID y
+# AZURE_API_AUDIENCE (ver ec2/deploy.sh).
 
 x-spring-env: &spring-env
   SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
   AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
-  AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+  AZURE_API_AUDIENCE: ${AZURE_API_AUDIENCE:-}
 
 x-db-env: &db-env
   DB_HOST: postgres
@@ -21,9 +28,10 @@ services:
   shipments:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.service
+      dockerfile: infra/docker/Dockerfile.jvm
       args:
-        MODULE: ms-rutaexpress-shipments
+        MODULE_DIR: ms-rutaexpress-shipments
+        JAVA_VERSION: "17"
     environment:
       <<: [*spring-env, *db-env]
       DB_NAME: shipments
@@ -46,10 +54,7 @@ services:
 
   catalog:
     build:
-      context: ..
-      dockerfile: infra/Dockerfile.service
-      args:
-        MODULE: ms-rutaexpress-catalog
+      context: ../ms-rutaexpress-catalog
     environment:
       <<: [*spring-env, *db-env]
       DB_NAME: catalog
@@ -64,9 +69,10 @@ services:
   notify:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.service
+      dockerfile: infra/docker/Dockerfile.jvm
       args:
-        MODULE: ms-rutaexpress-notify
+        MODULE_DIR: ms-rutaexpress-notify
+        JAVA_VERSION: "17"
     environment:
       <<: [*spring-env, *db-env]
       DB_NAME: notify
@@ -86,10 +92,7 @@ services:
 
   report:
     build:
-      context: ..
-      dockerfile: infra/Dockerfile.service
-      args:
-        MODULE: ms-rutaexpress-report
+      context: ../ms-rutaexpress-report
     environment:
       <<: *spring-env
       KAFKA_BOOTSTRAP: kafka:9092
@@ -103,10 +106,7 @@ services:
 
   audit:
     build:
-      context: ..
-      dockerfile: infra/Dockerfile.service
-      args:
-        MODULE: ms-rutaexpress-audit
+      context: ../ms-rutaexpress-audit
     environment:
       <<: [*spring-env, *db-env]
       DB_NAME: audit
@@ -124,16 +124,20 @@ services:
   bff:
     build:
       context: ..
-      dockerfile: infra/Dockerfile.service
+      dockerfile: infra/docker/Dockerfile.jvm
       args:
-        MODULE: ms-rutaexpress-bff
+        MODULE_DIR: ms-rutaexpress-bff
+        JAVA_VERSION: "21"
     environment:
-      <<: *spring-env
       SHIPMENTS_URL: http://shipments:8081
       CATALOG_URL: http://catalog:8082
       NOTIFY_URL: http://notify:8083
       REPORT_URL: http://report:8084
       AUDIT_URL: http://audit:8085
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_API_AUDIENCE: ${AZURE_API_AUDIENCE:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      PORT: 8080
     ports:
       - "8080:8080"
     networks:
@@ -141,12 +145,14 @@ services:
 
   frontend:
     build:
-      context: ../frontend
+      context: ..
+      dockerfile: infra/docker/Dockerfile.frontend
       args:
-        VITE_BFF_URL: ${VITE_BFF_URL:-/api/bff}
-        VITE_AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
-        VITE_AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
-        VITE_AZURE_API_SCOPE: ${AZURE_API_SCOPE:-api://rutaexpress/access_as_user}
+        MODULE_DIR: frontend-rutaexpress
+        VITE_TENANT_ID: ${VITE_TENANT_ID:-}
+        VITE_SPA_CLIENT_ID: ${VITE_SPA_CLIENT_ID:-}
+        VITE_API_SCOPE: ${VITE_API_SCOPE:-api://rutaexpress/access_as_user}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
     ports:
       - "3000:80"
     networks:

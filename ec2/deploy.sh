@@ -1,37 +1,32 @@
 #!/usr/bin/env bash
 #
-# Despliegue de RutaExpress en EC2 (Amazon Linux 2023).
+# Despliegue de RutaExpress con repos hermanos (ver Cloud-Native-1/REPOS.md).
+# Uso (desde infra/):
+#   ./ec2/deploy.sh              # prod (PostgreSQL, sin JWT)
+#   ./ec2/deploy.sh --secure     # prod,secure (JWT obligatorio; producción)
 #
-# Uso:
-#   ./deploy.sh              # sin seguridad (perfil dev)
-#   ./deploy.sh --secure     # con JWT obligatorio (perfil Spring "secure")
-#
-# Requisitos: docker + docker compose instalados, repo clonado, infra/.env presente.
-
 set -euo pipefail
 
-REPO_DIR="${REPO_DIR:-$HOME/Cloud-Native-1}"
-COMPOSE_FILES=(-f infra/docker-compose.base.yml -f infra/docker-compose.apps.yml)
+cd "$(dirname "${BASH_SOURCE[0]}")/.."  # -> infra/
+BASE_DIR="$(pwd)/.."
 
-cd "$REPO_DIR"
+for r in ms-rutaexpress-shipments ms-rutaexpress-catalog ms-rutaexpress-notify \
+         ms-rutaexpress-report ms-rutaexpress-audit ms-rutaexpress-bff frontend-rutaexpress; do
+  [[ -d "$BASE_DIR/$r" ]] || { echo "falta $BASE_DIR/$r: clónalo al lado de infra/"; exit 1; }
+done
 
-if [[ ! -f infra/.env ]]; then
-  cp infra/.env.example infra/.env
-  echo "Se creó infra/.env a partir del ejemplo. Edítalo (brokers, Azure AD) y vuelve a ejecutar."
-  exit 1
-fi
+[[ -f .env ]] || { cp .env.example .env; echo "Se creó .env: complétalo y vuelve a ejecutar."; exit 1; }
 
+# shellcheck disable=SC1091
+set -a; source .env; set +a
+export SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-prod}"
 if [[ "${1:-}" == "--secure" ]]; then
-  # shellcheck disable=SC1091
-  set -a; source infra/.env; set +a
   export SPRING_PROFILES_ACTIVE="prod,secure"
-  if [[ -z "${AZURE_TENANT_ID:-}" || -z "${AZURE_CLIENT_ID:-}" ]]; then
-    echo "Para --secure, define AZURE_TENANT_ID y AZURE_CLIENT_ID en infra/.env"
-    exit 1
-  fi
+fi
+if [[ "$SPRING_PROFILES_ACTIVE" == *secure* ]]; then
+  [[ -n "${AZURE_TENANT_ID:-}" && -n "${AZURE_API_AUDIENCE:-}" ]] \
+    || { echo "Con perfil secure define AZURE_TENANT_ID y AZURE_API_AUDIENCE en .env"; exit 1; }
 fi
 
-git pull --ff-only
-
-docker compose "${COMPOSE_FILES[@]}" up -d --build
-docker compose "${COMPOSE_FILES[@]}" ps
+docker compose -f docker-compose.base.yml -f docker-compose.apps.yml up -d --build
+docker compose -f docker-compose.base.yml -f docker-compose.apps.yml ps

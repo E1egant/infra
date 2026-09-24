@@ -1,0 +1,18 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Crear dirs hermanos (el compose referencia repos vecinos)
+        run: mkdir -p ../ms-rutaexpress-shipments ../ms-rutaexpress-catalog ../ms-rutaexpress-notify ../ms-rutaexpress-report ../ms-rutaexpress-audit ../ms-rutaexpress-bff ../frontend-rutaexpress
+      - name: Validar compose
+        run: docker compose -f docker-compose.base.yml -f docker-compose.apps.yml config --quiet
+      - name: Validar RabbitMQ definitions
+        run: python3 -m json.tool rabbitmq/definitions.json > /dev/null

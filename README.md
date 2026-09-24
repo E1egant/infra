@@ -4,17 +4,25 @@ Infraestructura de RutaExpress: Docker Compose (RabbitMQ, Kafka KRaft, PostgreSQ
 
 Responsable: compañero / opencode.
 
+## Layout (repos separados)
+
+Los 9 repos se clonan como hermanos en una misma carpeta (ver `Cloud-Native-1/REPOS.md`).
+Todo lo de este repo asume esa estructura (`../ms-rutaexpress-*`, `../frontend-rutaexpress`).
+
 ## Contenido
 
-- `docker-compose.base.yml`: red, volúmenes, RabbitMQ y Kafka.
-- `docker-compose.apps.yml`: los microservicios y el frontend.
+- `docker-compose.base.yml`: red, volúmenes, RabbitMQ (con topología del caso), Kafka y PostgreSQL.
+- `docker-compose.apps.yml`: los microservicios y el frontend desde repos hermanos.
+- `docker/`: Dockerfiles genéricos (`Dockerfile.jvm`, `Dockerfile.frontend`, `nginx-spa.conf`) para los repos que aún no traen el suyo.
+- `rabbitmq/`: `rabbitmq.conf` + `definitions.json` (exchanges, colas, DLQ, bindings) y README.
 - `api-gateway/`, `ec2/`: plantillas CloudFormation, `deploy.sh`.
 - `azure-ad/`: guía de App Registration y MSAL.
 - `postgres/`: `init.sql` (una BD por servicio).
 - `DESPLIEGUE.md`, `smoke-test.sh`.
 
-## Pendiente tras separar los repos
+## Perfiles
 
-`docker-compose.apps.yml` y `Dockerfile.service` fueron escritos para el monorepo (`context: ..`, ruta `infra/Dockerfile.service`). Ahora cada servicio vive en su propio repo (`E1egant/ms-rutaexpress-*`, `E1egant/frontend-rutaexpress`), así que hay que cambiar el `build` para que use el repo de cada servicio (por ejemplo `context: https://github.com/E1egant/<repo>.git`, o clonar los repos junto a `infra/` y apuntar a `../<repo>`), y ajustar `deploy.sh` y el CI.
+`docker compose up` usa `prod` (PostgreSQL, sin JWT). Producción: `./ec2/deploy.sh --secure`
+(`prod,secure`, JWT obligatorio) con `AZURE_TENANT_ID` y `AZURE_API_AUDIENCE` en `.env`.
 
 Coordinación entre repos, contratos y reglas: repositorio `Cloud-Native-1`.

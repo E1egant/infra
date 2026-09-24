@@ -1,0 +1,23 @@
+# Build genérico para los microservicios Spring Boot que viven en repos hermanos.
+# Contexto: la carpeta padre (con todos los repos clonados lado a lado).
+# Uso en docker-compose.apps.yml:
+#   build:
+#     context: ..
+#     dockerfile: infra/docker/Dockerfile.jvm
+#     args:
+#       MODULE_DIR: ms-rutaexpress-shipments
+#       JAVA_VERSION: "17"   # "21" para el BFF
+ARG JAVA_VERSION=17
+FROM maven:3.9-eclipse-temurin-${JAVA_VERSION} AS build
+ARG MODULE_DIR
+WORKDIR /build
+COPY ${MODULE_DIR}/pom.xml ./
+COPY ${MODULE_DIR}/src ./src
+RUN mvn -q -B package -DskipTests
+
+ARG JAVA_VERSION
+FROM eclipse-temurin:${JAVA_VERSION}-jre
+WORKDIR /app
+COPY --from=build /build/target/*.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

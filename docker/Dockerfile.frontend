@@ -1,0 +1,22 @@
+# Build genérico para el frontend React (repo hermano).
+# Contexto: la carpeta padre (con todos los repos clonados lado a lado).
+FROM node:20-alpine AS build
+ARG MODULE_DIR=frontend-rutaexpress
+ARG VITE_TENANT_ID=
+ARG VITE_SPA_CLIENT_ID=
+ARG VITE_API_SCOPE=
+ARG VITE_API_BASE_URL=http://localhost:8080
+WORKDIR /app
+ENV VITE_TENANT_ID=$VITE_TENANT_ID \
+    VITE_SPA_CLIENT_ID=$VITE_SPA_CLIENT_ID \
+    VITE_API_SCOPE=$VITE_API_SCOPE \
+    VITE_API_BASE_URL=$VITE_API_BASE_URL
+COPY ${MODULE_DIR}/package.json ${MODULE_DIR}/package-lock.json ./
+RUN npm ci
+COPY ${MODULE_DIR}/. .
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY infra/docker/nginx-spa.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
