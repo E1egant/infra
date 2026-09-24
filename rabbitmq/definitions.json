@@ -1,0 +1,54 @@
+{
+  "rabbit_version": "3.13",
+  "rabbitmq_version": "3.13",
+  "product_info": [],
+  "parameters": [],
+  "global_parameters": [],
+  "policies": [],
+  "users": [],
+  "vhosts": [],
+  "permissions": [],
+  "topic_permissions": [],
+  "queues": [
+    {
+      "name": "q.cmd.email",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {"x-dead-letter-exchange": "cmd.dead.dlx"}
+    },
+    {
+      "name": "q.cmd.warehouse",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {"x-dead-letter-exchange": "cmd.dead.dlx"}
+    },
+    {
+      "name": "q.cmd.label",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {"x-dead-letter-exchange": "cmd.dead.dlx"}
+    },
+    {"name": "q.cmd.email.dlq", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "q.cmd.warehouse.dlq", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "q.cmd.label.dlq", "vhost": "/", "durable": true, "auto_delete": false, "arguments": {}}
+  ],
+  "exchanges": [
+    {"name": "cmd.direct", "vhost": "/", "type": "direct", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "cmd.topic", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "arguments": {}},
+    {"name": "cmd.dead.dlx", "vhost": "/", "type": "topic", "durable": true, "auto_delete": false, "arguments": {}}
+  ],
+  "bindings": [
+    {"source": "cmd.direct", "vhost": "/", "destination": "q.cmd.email", "destination_type": "queue", "routing_key": "email.send", "arguments": {}},
+    {"source": "cmd.direct", "vhost": "/", "destination": "q.cmd.warehouse", "destination_type": "queue", "routing_key": "warehouse.ticket", "arguments": {}},
+    {"source": "cmd.direct", "vhost": "/", "destination": "q.cmd.label", "destination_type": "queue", "routing_key": "label.gen", "arguments": {}},
+    {"source": "cmd.topic", "vhost": "/", "destination": "q.cmd.email", "destination_type": "queue", "routing_key": "email.*", "arguments": {}},
+    {"source": "cmd.topic", "vhost": "/", "destination": "q.cmd.warehouse", "destination_type": "queue", "routing_key": "warehouse.#", "arguments": {}},
+    {"source": "cmd.topic", "vhost": "/", "destination": "q.cmd.label", "destination_type": "queue", "routing_key": "label.*", "arguments": {}},
+    {"source": "cmd.dead.dlx", "vhost": "/", "destination": "q.cmd.email.dlq", "destination_type": "queue", "routing_key": "email.#", "arguments": {}},
+    {"source": "cmd.dead.dlx", "vhost": "/", "destination": "q.cmd.warehouse.dlq", "destination_type": "queue", "routing_key": "warehouse.#", "arguments": {}},
+    {"source": "cmd.dead.dlx", "vhost": "/", "destination": "q.cmd.label.dlq", "destination_type": "queue", "routing_key": "label.#", "arguments": {}}
+  ]
+}
